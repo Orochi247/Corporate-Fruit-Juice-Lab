@@ -24,7 +24,6 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // Web Audio Synthesizer (Zero asset dependencies, instant chime)
     const playOrderChime = () => {
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -33,8 +32,8 @@
         const gain = audioCtx.createGain();
 
         osc.type = "sine";
-        osc.frequency.setValueAtTime(587.33, now); // D5
-        osc.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
+        osc.frequency.setValueAtTime(587.33, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
 
         gain.gain.setValueAtTime(0.3, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
@@ -48,43 +47,9 @@
       }
     };
 
-    const INITIAL_INGREDIENTS = [
-      { id: "ing_1", name: "Orange", category: "Base", available: true },
-      { id: "ing_2", name: "Sweet Lime (Mosambi)", category: "Base", available: true },
-      { id: "ing_3", name: "Pineapple", category: "Base", available: true },
-      { id: "ing_4", name: "Watermelon", category: "Base", available: true },
-      { id: "ing_5", name: "Apple", category: "Mix-in", available: true },
-      { id: "ing_6", name: "Beetroot", category: "Mix-in", available: true },
-      { id: "ing_7", name: "Carrot", category: "Mix-in", available: true },
-      { id: "ing_8", name: "Cucumber", category: "Mix-in", available: true },
-      { id: "ing_9", name: "Chia Seeds", category: "Booster", available: true },
-      { id: "ing_10", name: "Flax-Pumpkin Seeds", category: "Booster", available: true },
-      { id: "ing_11", name: "Ginger/Turmeric Shot", category: "Booster", available: true },
-    ];
-
-    const INITIAL_ORDERS = [
-      {
-        id: "ord_101",
-        orderNumber: "101",
-        customerName: "Rahul Sharma",
-        pickupType: "EXPRESS DESK",
-        type: "CUSTOM",
-        targetTitle: "Digest & Reset Custom",
-        status: "QUEUED",
-        createdAt: Date.now() - 250000,
-        calories: 125,
-        recipe: [
-          { name: "Pineapple", grams: 140 },
-          { name: "Cucumber", grams: 80 },
-          { name: "Fresh Mint", grams: 5 },
-          { name: "Chia Seeds", grams: 10 }
-        ]
-      }
-    ];
-
     function App() {
-      const [orders, setOrders] = useState(INITIAL_ORDERS);
-      const [ingredients, setIngredients] = useState(INITIAL_INGREDIENTS);
+      const [orders, setOrders] = useState([]);
+      const [ingredients, setIngredients] = useState([]);
       const [isStockModalOpen, setIsStockModalOpen] = useState(false);
       const [now, setNow] = useState(Date.now());
       const [connectionStatus, setConnectionStatus] = useState("CONNECTING");
@@ -92,13 +57,11 @@
       const wsRef = useRef(null);
       const reconnectTimeoutRef = useRef(null);
 
-      // 1-Second Clock for Urgency Timers
       useEffect(() => {
         const timer = setInterval(() => setNow(Date.now()), 1000);
         return () => clearInterval(timer);
       }, []);
 
-      // Dynamic Auto-Reconnecting WebSocket Client
       const connectWebSocket = () => {
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         const host = window.location.host || "localhost:4000";
@@ -111,15 +74,15 @@
           wsRef.current = ws;
 
           ws.onopen = () => {
-            console.log("[KDS WS] Connected to backend.");
             setConnectionStatus("CONNECTED");
           };
 
           ws.onmessage = (event) => {
             try {
               const data = JSON.parse(event.data);
-              if (data.type === "INIT_QUEUE" && Array.isArray(data.orders)) {
-                if (data.orders.length > 0) setOrders(data.orders);
+              if (data.type === "INIT_QUEUE") {
+                if (Array.isArray(data.orders)) setOrders(data.orders);
+                if (Array.isArray(data.ingredients)) setIngredients(data.ingredients);
               } else if (data.type === "ORDER_CREATED" && data.order) {
                 setOrders((prev) => [data.order, ...prev.filter(o => o.id !== data.order.id)]);
                 playOrderChime();
@@ -144,9 +107,7 @@
             reconnectTimeoutRef.current = setTimeout(connectWebSocket, 4000);
           };
 
-          ws.onerror = () => {
-            ws.close();
-          };
+          ws.onerror = () => ws.close();
         } catch (e) {
           setConnectionStatus("OFFLINE");
           reconnectTimeoutRef.current = setTimeout(connectWebSocket, 4000);
@@ -161,32 +122,26 @@
         };
       }, []);
 
-      // Advance Status (QUEUED -> BLENDING -> READY -> COLLECTED)
       const advanceOrderStatus = (orderId) => {
         const targetOrder = orders.find(o => o.id === orderId);
         if (!targetOrder) return;
 
         let nextStatus = "BLENDING";
         if (targetOrder.status === "QUEUED") nextStatus = "BLENDING";
-        else if (targetOrder.status === "BLENDING") {
-          console.log(`[ESC/POS PRINT] Sticker printed for #${targetOrder.orderNumber} (${targetOrder.customerName})`);
-          nextStatus = "READY";
-        } else if (targetOrder.status === "READY") {
-          nextStatus = "COLLECTED";
-        }
+        else if (targetOrder.status === "BLENDING") nextStatus = "READY";
+        else if (targetOrder.status === "READY") nextStatus = "COLLECTED";
 
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus } : o));
 
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({
             type: "UPDATE_STATUS",
-            orderId: orderId,
+            orderId,
             status: nextStatus
           }));
         }
       };
 
-      // Toggle Ingredients In/Out of Stock
       const toggleStock = (id) => {
         const item = ingredients.find(i => i.id === id);
         if (!item) return;
@@ -203,7 +158,6 @@
         }
       };
 
-      // Manual Simulator Button
       const simulateIncomingOrder = () => {
         const randomNum = Math.floor(104 + Math.random() * 800);
         const newOrder = {
@@ -313,7 +267,6 @@
                       key={order.id}
                       className={`w-[340px] shrink-0 h-full flex flex-col rounded-2xl border-2 ${urgencyClass} overflow-hidden shadow-2xl transition-all duration-200`}
                     >
-                      {/* CARD HEADER */}
                       <div className="p-4 bg-neutral-900 border-b border-neutral-800 flex justify-between items-start">
                         <div>
                           <div className="flex items-center gap-2">
@@ -338,7 +291,6 @@
                         </div>
                       </div>
 
-                      {/* BLEND TITLE & CALORIES */}
                       <div className="px-4 py-2.5 bg-neutral-850/60 border-b border-neutral-800 flex justify-between items-center text-xs">
                         <span className="font-bold text-neutral-200 truncate pr-2">
                           {order.targetTitle}
@@ -348,7 +300,6 @@
                         </span>
                       </div>
 
-                      {/* RECIPE GRAMS */}
                       <div className="flex-1 p-4 overflow-y-auto space-y-2 bg-neutral-950/40">
                         {order.recipe.map((item, idx) => (
                           <div 
@@ -365,7 +316,6 @@
                         ))}
                       </div>
 
-                      {/* ACTION BUTTON */}
                       <div className="p-3 bg-neutral-900 border-t border-neutral-800">
                         {order.status === "QUEUED" && (
                           <button
@@ -381,7 +331,7 @@
                             onClick={() => advanceOrderStatus(order.id)}
                             className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-black text-sm uppercase tracking-wide rounded-xl shadow-lg shadow-emerald-950 transition flex items-center justify-center gap-2"
                           >
-                            <span>✔ Mark Ready & Print</span>
+                            <span>✔ Mark Ready &amp; Print</span>
                           </button>
                         )}
 
@@ -408,7 +358,7 @@
                 <div className="p-5 border-b border-neutral-800 flex justify-between items-center">
                   <div>
                     <h2 className="text-lg font-bold text-white">Counter Stock Manager</h2>
-                    <p className="text-xs text-neutral-400">Toggling an ingredient immediately updates customer desk ordering.</p>
+                    <p className="text-xs text-neutral-400">Toggling an ingredient immediately updates customer phones in real time.</p>
                   </div>
                   <button 
                     onClick={() => setIsStockModalOpen(false)}
@@ -449,7 +399,7 @@
                     onClick={() => setIsStockModalOpen(false)}
                     className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition"
                   >
-                    Done & Apply
+                    Done
                   </button>
                 </div>
               </div>

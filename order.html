@@ -17,104 +17,18 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useMemo } = React;
-
-    const SIGNATURE_BLENDS = [
-      {
-        id: "sig_1",
-        timeSlot: "09:00 AM",
-        tagline: "Focus & Detox",
-        name: "Morning Kickstart (ABC)",
-        price: 130,
-        calories: 145,
-        sugar: 22,
-        desc: "Crisp Apple, organic Beetroot, Carrot, cold-pressed Ginger & Lemon.",
-        recipe: [
-          { name: "Apple", grams: 100 },
-          { name: "Beetroot", grams: 60 },
-          { name: "Carrot", grams: 80 },
-          { name: "Fresh Ginger & Lemon", grams: 10 }
-        ]
-      },
-      {
-        id: "sig_2",
-        timeSlot: "01:30 PM",
-        tagline: "Gut & Digestion Reset",
-        name: "Post-Lunch Reset",
-        price: 120,
-        calories: 115,
-        sugar: 17,
-        desc: "Pineapple, cooling Cucumber, Fresh Mint sprigs, Himalayan Black Salt.",
-        recipe: [
-          { name: "Pineapple", grams: 140 },
-          { name: "Cucumber", grams: 80 },
-          { name: "Fresh Mint", grams: 5 },
-          { name: "Himalayan Salt", grams: 2 }
-        ]
-      },
-      {
-        id: "sig_3",
-        timeSlot: "04:00 PM",
-        tagline: "Sustained No-Crash Energy",
-        name: "Screen-Fatigue Shield",
-        price: 140,
-        calories: 125,
-        sugar: 19,
-        desc: "Valencia Orange, Sweet Carrot, Raw Haldi shot, Black Pepper, Chia Seeds.",
-        recipe: [
-          { name: "Valencia Orange", grams: 150 },
-          { name: "Carrot", grams: 70 },
-          { name: "Raw Turmeric & Pepper", grams: 5 },
-          { name: "Chia Seeds", grams: 10 }
-        ]
-      },
-      {
-        id: "sig_4",
-        timeSlot: "06:00 PM",
-        tagline: "Post-Work Satiety & Recovery",
-        name: "Gym & Commute Fuel",
-        price: 160,
-        calories: 220,
-        sugar: 14,
-        desc: "Curd / Greek Yogurt, Banana, Roasted Chana protein, Flax & Pumpkin seeds.",
-        recipe: [
-          { name: "Curd / Yogurt Base", grams: 150 },
-          { name: "Banana", grams: 80 },
-          { name: "Roasted Chana Powder", grams: 20 },
-          { name: "Flax & Pumpkin Seeds", grams: 15 }
-        ]
-      }
-    ];
-
-    const INGREDIENTS_CATALOG = {
-      bases: [
-        { id: "b_orange", name: "Valencia Orange", caloriesPer100g: 47, sugarPer100g: 9, defaultGrams: 150 },
-        { id: "b_mosambi", name: "Sweet Lime (Mosambi)", caloriesPer100g: 43, sugarPer100g: 8, defaultGrams: 150 },
-        { id: "b_pineapple", name: "Pineapple", caloriesPer100g: 50, sugarPer100g: 10, defaultGrams: 140 },
-        { id: "b_watermelon", name: "Watermelon", caloriesPer100g: 30, sugarPer100g: 6, defaultGrams: 180 },
-        { id: "b_coconut", name: "Tender Coconut Water", caloriesPer100g: 19, sugarPer100g: 3.5, defaultGrams: 180 }
-      ],
-      mixins: [
-        { id: "m_apple", name: "Green/Red Apple", caloriesPer100g: 52, sugarPer100g: 10, defaultGrams: 70 },
-        { id: "m_beet", name: "Beetroot", caloriesPer100g: 43, sugarPer100g: 7, defaultGrams: 60 },
-        { id: "m_carrot", name: "Carrot", caloriesPer100g: 41, sugarPer100g: 5, defaultGrams: 70 },
-        { id: "m_cuke", name: "Cucumber", caloriesPer100g: 15, sugarPer100g: 2, defaultGrams: 80 },
-        { id: "m_pome", name: "Pomegranate", caloriesPer100g: 83, sugarPer100g: 14, defaultGrams: 60 },
-        { id: "m_spinach", name: "Baby Spinach", caloriesPer100g: 23, sugarPer100g: 0.4, defaultGrams: 30 }
-      ],
-      boosters: [
-        { id: "bst_chia", name: "Soaked Chia Seeds (+₹25)", price: 25, caloriesPer100g: 486, defaultGrams: 10 },
-        { id: "bst_seeds", name: "Flax & Pumpkin Seeds (+₹25)", price: 25, caloriesPer100g: 540, defaultGrams: 15 },
-        { id: "bst_turm", name: "Raw Turmeric & Pepper (+₹15)", price: 15, caloriesPer100g: 40, defaultGrams: 5 },
-        { id: "bst_protein", name: "Plant Protein Scoop (+₹40)", price: 40, caloriesPer100g: 380, defaultGrams: 20 }
-      ]
-    };
+    const { useState, useEffect, useMemo, useRef } = React;
 
     function CustomerApp() {
+      const [ingredients, setIngredients] = useState([]);
+      const [signatureBlends, setSignatureBlends] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [stockAlert, setStockAlert] = useState(null);
+
       const [activeTab, setActiveTab] = useState("SIGNATURE");
-      const [selectedBase, setSelectedBase] = useState(INGREDIENTS_CATALOG.bases[0]);
-      const [selectedMixins, setSelectedMixins] = useState([INGREDIENTS_CATALOG.mixins[0]]);
-      const [selectedBooster, setSelectedBooster] = useState(null);
+      const [selectedBaseId, setSelectedBaseId] = useState(null);
+      const [selectedMixinIds, setSelectedMixinIds] = useState([]);
+      const [selectedBoosterId, setSelectedBoosterId] = useState(null);
 
       const [checkoutItem, setCheckoutItem] = useState(null);
       const [customerName, setCustomerName] = useState("");
@@ -124,9 +38,119 @@
       const [isSubmitting, setIsSubmitting] = useState(false);
       const [orderSuccess, setOrderSuccess] = useState(null);
 
+      const wsRef = useRef(null);
+      const reconnectRef = useRef(null);
+
+      // 1. Fetch Live Catalog & Stock on Mount
+      useEffect(() => {
+        fetch("/api/catalog")
+          .then(res => res.json())
+          .then(data => {
+            setIngredients(data.ingredients || []);
+            setSignatureBlends(data.signatureBlends || []);
+
+            // Pick initial available defaults
+            const firstBase = (data.ingredients || []).find(i => i.category === "Base" && i.available);
+            const firstMixin = (data.ingredients || []).find(i => i.category === "Mix-in" && i.available);
+            if (firstBase) setSelectedBaseId(firstBase.id);
+            if (firstMixin) setSelectedMixinIds([firstMixin.id]);
+            setLoading(false);
+          })
+          .catch(err => {
+            console.error("Failed to load catalog:", err);
+            setLoading(false);
+          });
+      }, []);
+
+      // 2. Live WebSocket Listener for Real-Time Stock Sync
+      useEffect(() => {
+        const connectWs = () => {
+          const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+          const host = window.location.host || "localhost:4000";
+          const ws = new WebSocket(`${protocol}//${host}/kds-stream`);
+          wsRef.current = ws;
+
+          ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.type === "INIT_QUEUE" && Array.isArray(data.ingredients)) {
+                setIngredients(data.ingredients);
+              } else if (data.type === "STOCK_CHANGED") {
+                setIngredients(prev =>
+                  prev.map(item =>
+                    item.id === data.ingredientId ? { ...item, available: data.available } : item
+                  )
+                );
+              }
+            } catch (e) {
+              console.error("WS parse error:", e);
+            }
+          };
+
+          ws.onclose = () => {
+            reconnectRef.current = setTimeout(connectWs, 4000);
+          };
+        };
+
+        connectWs();
+        return () => {
+          if (wsRef.current) wsRef.current.close();
+          if (reconnectRef.current) clearTimeout(reconnectRef.current);
+        };
+      }, []);
+
+      // 3. Auto-Clean Selections If an Ingredient Goes Out of Stock Live
+      useEffect(() => {
+        if (ingredients.length === 0) return;
+
+        // Check selected base
+        const currentBase = ingredients.find(i => i.id === selectedBaseId);
+        if (currentBase && !currentBase.available) {
+          const nextAvailableBase = ingredients.find(i => i.category === "Base" && i.available);
+          setSelectedBaseId(nextAvailableBase ? nextAvailableBase.id : null);
+          triggerAlert(`${currentBase.name} just ran out at the counter.`);
+        }
+
+        // Check selected mix-ins
+        const validMixins = selectedMixinIds.filter(id => {
+          const item = ingredients.find(i => i.id === id);
+          if (item && !item.available) {
+            triggerAlert(`${item.name} just ran out and was removed from your blend.`);
+            return false;
+          }
+          return true;
+        });
+        if (validMixins.length !== selectedMixinIds.length) {
+          setSelectedMixinIds(validMixins);
+        }
+
+        // Check selected booster
+        if (selectedBoosterId) {
+          const currentBooster = ingredients.find(i => i.id === selectedBoosterId);
+          if (currentBooster && !currentBooster.available) {
+            setSelectedBoosterId(null);
+            triggerAlert(`${currentBooster.name} just ran out and was removed.`);
+          }
+        }
+      }, [ingredients]);
+
+      const triggerAlert = (msg) => {
+        setStockAlert(msg);
+        setTimeout(() => setStockAlert(null), 5000);
+      };
+
+      const bases = useMemo(() => ingredients.filter(i => i.category === "Base"), [ingredients]);
+      const mixins = useMemo(() => ingredients.filter(i => i.category === "Mix-in"), [ingredients]);
+      const boosters = useMemo(() => ingredients.filter(i => i.category === "Booster"), [ingredients]);
+
+      const selectedBase = bases.find(b => b.id === selectedBaseId) || null;
+      const selectedMixins = mixins.filter(m => selectedMixinIds.includes(m.id));
+      const selectedBooster = boosters.find(b => b.id === selectedBoosterId) || null;
+
+      // Dynamic Nutrient & Price Calculation
       const customMetrics = useMemo(() => {
-        let cal = (selectedBase.caloriesPer100g * selectedBase.defaultGrams) / 100;
-        let sug = (selectedBase.sugarPer100g * selectedBase.defaultGrams) / 100;
+        let cal = selectedBase ? (selectedBase.caloriesPer100g * selectedBase.defaultGrams) / 100 : 0;
+        let sug = selectedBase ? (selectedBase.sugarPer100g * selectedBase.defaultGrams) / 100 : 0;
         let price = 120;
 
         selectedMixins.forEach(m => {
@@ -136,31 +160,33 @@
 
         if (selectedBooster) {
           cal += (selectedBooster.caloriesPer100g * selectedBooster.defaultGrams) / 100;
-          price += selectedBooster.price;
+          price += selectedBooster.price || 0;
         }
 
         return {
           calories: Math.round(cal),
           sugar: Math.round(sug),
-          price: price
+          price
         };
       }, [selectedBase, selectedMixins, selectedBooster]);
 
       const toggleMixin = (item) => {
-        if (selectedMixins.some(m => m.id === item.id)) {
-          setSelectedMixins(selectedMixins.filter(m => m.id !== item.id));
-        } else if (selectedMixins.length < 2) {
-          setSelectedMixins([...selectedMixins, item]);
+        if (!item.available) return;
+        if (selectedMixinIds.includes(item.id)) {
+          setSelectedMixinIds(selectedMixinIds.filter(id => id !== item.id));
+        } else if (selectedMixinIds.length < 2) {
+          setSelectedMixinIds([...selectedMixinIds, item.id]);
         }
       };
 
       const handleStartCustomCheckout = () => {
+        if (!selectedBase) return;
         const recipeList = [
-          { name: selectedBase.name, grams: selectedBase.defaultGrams },
-          ...selectedMixins.map(m => ({ name: m.name, grams: m.defaultGrams }))
+          { id: selectedBase.id, name: selectedBase.name, grams: selectedBase.defaultGrams },
+          ...selectedMixins.map(m => ({ id: m.id, name: m.name, grams: m.defaultGrams }))
         ];
         if (selectedBooster) {
-          recipeList.push({ name: selectedBooster.name.split(" (")[0], grams: selectedBooster.defaultGrams });
+          recipeList.push({ id: selectedBooster.id, name: selectedBooster.name, grams: selectedBooster.defaultGrams });
         }
 
         setCheckoutItem({
@@ -176,46 +202,59 @@
         if (!customerName.trim()) return alert("Please enter your name");
 
         setIsSubmitting(true);
-        // Relative URL so mobile phones route back to the host server
-        const API_URL = window.API_ENDPOINT || "/api/orders";
-
         const orderPayload = {
           customerName: deskLocation ? `${customerName} (${deskLocation})` : customerName,
-          pickupType: pickupType,
+          pickupType,
           targetTitle: checkoutItem.targetTitle,
           calories: checkoutItem.calories,
           recipe: checkoutItem.recipe
         };
 
         try {
-          const res = await fetch(API_URL, {
+          const res = await fetch("/api/orders", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(orderPayload)
           });
           const data = await res.json();
+
+          if (res.status === 409) {
+            triggerAlert(data.error);
+            setCheckoutItem(null);
+            return;
+          }
+
           if (data.success) {
             setOrderSuccess(data.order);
             setCheckoutItem(null);
           } else {
-            throw new Error("Server rejected order");
+            throw new Error(data.error || "Order failed");
           }
         } catch (err) {
-          console.warn("[API Offline] Simulating successful order locally");
-          setOrderSuccess({
-            orderNumber: String(Math.floor(100 + Math.random() * 900)),
-            customerName: orderPayload.customerName,
-            pickupType: pickupType,
-            targetTitle: checkoutItem.targetTitle
-          });
-          setCheckoutItem(null);
+          alert("Could not reach the counter server. Please check your connection.");
         } finally {
           setIsSubmitting(false);
         }
       };
 
+      if (loading) {
+        return (
+          <div className="min-h-screen bg-neutral-950 flex items-center justify-center text-neutral-400 text-sm font-semibold">
+            Loading live menu...
+          </div>
+        );
+      }
+
       return (
         <div className="max-w-md mx-auto min-h-screen flex flex-col bg-neutral-950 pb-24 border-x border-neutral-900 shadow-2xl">
+          {/* LIVE STOCK TOAST NOTIFICATION */}
+          {stockAlert && (
+            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-sm bg-red-950 border border-red-500 text-red-100 px-4 py-3 rounded-xl shadow-2xl text-xs font-bold flex items-center justify-between">
+              <span>⚠️ {stockAlert}</span>
+              <button onClick={() => setStockAlert(null)} className="ml-3 text-red-300 font-black">✕</button>
+            </div>
+          )}
+
           {/* HEADER */}
           <header className="p-5 border-b border-neutral-900 bg-neutral-900/40 backdrop-blur sticky top-0 z-30 flex items-center justify-between">
             <div>
@@ -263,42 +302,65 @@
                 Timed for your workday rhythm. No added sugar or ice.
               </p>
 
-              {SIGNATURE_BLENDS.map((blend) => (
-                <div 
-                  key={blend.id}
-                  className="p-4 rounded-2xl bg-neutral-900/70 border border-neutral-800/80 hover:border-neutral-700 transition flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                        {blend.timeSlot} • {blend.tagline}
-                      </span>
-                      <span className="text-sm font-black font-mono text-white">
-                        ₹{blend.price}
-                      </span>
-                    </div>
-                    <h3 className="text-base font-bold text-white mt-1.5">{blend.name}</h3>
-                    <p className="text-xs text-neutral-400 mt-1 leading-relaxed">{blend.desc}</p>
-                  </div>
+              {signatureBlends.map((blend) => {
+                // Check if any ingredient required by this blend is marked OUT
+                const missingItems = (blend.ingredientIds || [])
+                  .map(id => ingredients.find(i => i.id === id))
+                  .filter(item => item && !item.available);
+                const isBlendAvailable = missingItems.length === 0;
 
-                  <div className="mt-4 pt-3 border-t border-neutral-800/60 flex items-center justify-between">
-                    <div className="text-[11px] font-mono text-neutral-400">
-                      <strong>{blend.calories}</strong> kcal • <strong>{blend.sugar}g</strong> nat. sugars
+                return (
+                  <div 
+                    key={blend.id}
+                    className={`p-4 rounded-2xl border transition flex flex-col justify-between ${
+                      isBlendAvailable
+                        ? "bg-neutral-900/70 border-neutral-800/80 hover:border-neutral-700"
+                        : "bg-neutral-900/30 border-red-900/40 opacity-65"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        {isBlendAvailable ? (
+                          <span className="text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                            {blend.timeSlot} • {blend.tagline}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-400">
+                            Out of {missingItems[0].name}
+                          </span>
+                        )}
+                        <span className="text-sm font-black font-mono text-white">
+                          ₹{blend.price}
+                        </span>
+                      </div>
+                      <h3 className="text-base font-bold text-white mt-1.5">{blend.name}</h3>
+                      <p className="text-xs text-neutral-400 mt-1 leading-relaxed">{blend.desc}</p>
                     </div>
-                    <button
-                      onClick={() => setCheckoutItem({
-                        targetTitle: blend.name,
-                        price: blend.price,
-                        calories: blend.calories,
-                        recipe: blend.recipe
-                      })}
-                      className="px-4 py-1.5 bg-neutral-800 hover:bg-neutral-700 active:scale-95 text-white text-xs font-bold rounded-lg border border-neutral-700 transition"
-                    >
-                      Pre-Order
-                    </button>
+
+                    <div className="mt-4 pt-3 border-t border-neutral-800/60 flex items-center justify-between">
+                      <div className="text-[11px] font-mono text-neutral-400">
+                        <strong>{blend.calories}</strong> kcal • <strong>{blend.sugar}g</strong> nat. sugars
+                      </div>
+                      <button
+                        disabled={!isBlendAvailable}
+                        onClick={() => setCheckoutItem({
+                          targetTitle: blend.name,
+                          price: blend.price,
+                          calories: blend.calories,
+                          recipe: blend.recipe
+                        })}
+                        className={`px-4 py-1.5 text-xs font-bold rounded-lg border transition ${
+                          isBlendAvailable
+                            ? "bg-neutral-800 hover:bg-neutral-700 active:scale-95 text-white border-neutral-700"
+                            : "bg-neutral-900 text-neutral-600 border-neutral-800 cursor-not-allowed"
+                        }`}
+                      >
+                        {isBlendAvailable ? "Pre-Order" : "Sold Out"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -330,20 +392,30 @@
                   <span className="text-[10px] text-emerald-400 font-bold">Pick 1</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {INGREDIENTS_CATALOG.bases.map(b => (
-                    <div
-                      key={b.id}
-                      onClick={() => setSelectedBase(b)}
-                      className={`p-3 rounded-xl border text-left cursor-pointer transition select-none ${
-                        selectedBase.id === b.id 
-                          ? "bg-emerald-500/15 border-emerald-500 text-white font-bold" 
-                          : "bg-neutral-900/60 border-neutral-800 text-neutral-300 hover:border-neutral-700"
-                      }`}
-                    >
-                      <p className="text-xs leading-tight">{b.name}</p>
-                      <span className="text-[10px] font-mono text-neutral-400 block mt-1">{b.caloriesPer100g} kcal/100g</span>
-                    </div>
-                  ))}
+                  {bases.map(b => {
+                    const isSelected = selectedBaseId === b.id;
+                    return (
+                      <div
+                        key={b.id}
+                        onClick={() => b.available && setSelectedBaseId(b.id)}
+                        className={`p-3 rounded-xl border text-left transition select-none ${
+                          !b.available
+                            ? "bg-red-950/15 border-red-900/30 text-neutral-600 cursor-not-allowed opacity-60"
+                            : isSelected 
+                            ? "bg-emerald-500/15 border-emerald-500 text-white font-bold cursor-pointer" 
+                            : "bg-neutral-900/60 border-neutral-800 text-neutral-300 hover:border-neutral-700 cursor-pointer"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start gap-1">
+                          <p className={`text-xs leading-tight ${!b.available ? "line-through" : ""}`}>{b.name}</p>
+                          {!b.available && (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 shrink-0">OUT</span>
+                          )}
+                        </div>
+                        <span className="text-[10px] font-mono text-neutral-400 block mt-1">{b.caloriesPer100g} kcal/100g</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -351,22 +423,29 @@
               <div>
                 <div className="flex justify-between items-center mb-2 px-1">
                   <h4 className="text-xs font-black uppercase tracking-wider text-neutral-300">2. Select Mix-Ins (40%)</h4>
-                  <span className="text-[10px] text-neutral-400 font-bold">{selectedMixins.length}/2 Selected</span>
+                  <span className="text-[10px] text-neutral-400 font-bold">{selectedMixinIds.length}/2 Selected</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {INGREDIENTS_CATALOG.mixins.map(m => {
-                    const isSelected = selectedMixins.some(x => x.id === m.id);
+                  {mixins.map(m => {
+                    const isSelected = selectedMixinIds.includes(m.id);
                     return (
                       <div
                         key={m.id}
                         onClick={() => toggleMixin(m)}
-                        className={`p-3 rounded-xl border text-left cursor-pointer transition select-none ${
-                          isSelected 
-                            ? "bg-emerald-500/15 border-emerald-500 text-white font-bold" 
-                            : "bg-neutral-900/60 border-neutral-800 text-neutral-300 hover:border-neutral-700"
+                        className={`p-3 rounded-xl border text-left transition select-none ${
+                          !m.available
+                            ? "bg-red-950/15 border-red-900/30 text-neutral-600 cursor-not-allowed opacity-60"
+                            : isSelected 
+                            ? "bg-emerald-500/15 border-emerald-500 text-white font-bold cursor-pointer" 
+                            : "bg-neutral-900/60 border-neutral-800 text-neutral-300 hover:border-neutral-700 cursor-pointer"
                         }`}
                       >
-                        <p className="text-xs leading-tight">{m.name}</p>
+                        <div className="flex justify-between items-start gap-1">
+                          <p className={`text-xs leading-tight ${!m.available ? "line-through" : ""}`}>{m.name}</p>
+                          {!m.available && (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 shrink-0">OUT</span>
+                          )}
+                        </div>
                         <span className="text-[10px] font-mono text-neutral-400 block mt-1">{m.caloriesPer100g} kcal/100g</span>
                       </div>
                     );
@@ -381,20 +460,30 @@
                   <span className="text-[10px] text-neutral-400 font-bold">Optional</span>
                 </div>
                 <div className="space-y-2">
-                  {INGREDIENTS_CATALOG.boosters.map(bst => {
-                    const isSelected = selectedBooster?.id === bst.id;
+                  {boosters.map(bst => {
+                    const isSelected = selectedBoosterId === bst.id;
                     return (
                       <div
                         key={bst.id}
-                        onClick={() => setSelectedBooster(isSelected ? null : bst)}
-                        className={`p-3 rounded-xl border text-left cursor-pointer transition select-none flex justify-between items-center ${
-                          isSelected 
-                            ? "bg-amber-500/15 border-amber-500 text-white font-bold" 
-                            : "bg-neutral-900/60 border-neutral-800 text-neutral-300 hover:border-neutral-700"
+                        onClick={() => bst.available && setSelectedBoosterId(isSelected ? null : bst.id)}
+                        className={`p-3 rounded-xl border text-left transition select-none flex justify-between items-center ${
+                          !bst.available
+                            ? "bg-red-950/15 border-red-900/30 text-neutral-600 cursor-not-allowed opacity-60"
+                            : isSelected 
+                            ? "bg-amber-500/15 border-amber-500 text-white font-bold cursor-pointer" 
+                            : "bg-neutral-900/60 border-neutral-800 text-neutral-300 hover:border-neutral-700 cursor-pointer"
                         }`}
                       >
-                        <span className="text-xs">{bst.name}</span>
-                        <span className="text-[10px] font-mono text-neutral-400">+{bst.caloriesPer100g * bst.defaultGrams / 100} kcal</span>
+                        <span className={`text-xs ${!bst.available ? "line-through" : ""}`}>
+                          {bst.name} (+₹{bst.price})
+                        </span>
+                        {bst.available ? (
+                          <span className="text-[10px] font-mono text-neutral-400">
+                            +{Math.round((bst.caloriesPer100g * bst.defaultGrams) / 100)} kcal
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">OUT</span>
+                        )}
                       </div>
                     );
                   })}
@@ -404,8 +493,8 @@
               {/* BOTTOM CTA */}
               <button
                 onClick={handleStartCustomCheckout}
-                disabled={selectedMixins.length === 0}
-                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 active:scale-98 disabled:opacity-50 text-white font-black text-sm uppercase tracking-wide rounded-xl shadow-xl shadow-emerald-950 transition"
+                disabled={!selectedBase || selectedMixins.length === 0}
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-sm uppercase tracking-wide rounded-xl shadow-xl shadow-emerald-950 transition"
               >
                 Review &amp; Desk Pickup (₹{customMetrics.price})
               </button>
